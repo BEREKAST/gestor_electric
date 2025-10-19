@@ -1,0 +1,90 @@
+.seller{ padding:16px; display:grid; gap:14px; }
+.seller__head{ display:flex; justify-content:space-between; align-items:center; }
+.tag{ padding: 2px 8px; border-radius: 999px; border:1px solid rgba(255,255,255,.16); }
+.tag--free{ background: rgba(255,255,255,.06); }
+.tag--pro{ background: rgba(37, 99, 235, .18); border-color: rgba(37,99,235,.4); }
+.tag--enterprise{ background: rgba(16, 185, 129, .18); border-color: rgba(16,185,129,.4); }
+
+.tabs{ display:flex; gap:8px; flex-wrap:wrap; }
+.tab{
+  background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+  padding:8px 12px; border-radius: 999px; cursor:pointer;
+}
+.tab.active{ background: var(--color-primary); color:#fff; border-color: transparent; }
+
+.panel{ display:grid; gap:14px; }
+
+/* KPIs */
+.kpis{ display:grid; gap:10px; grid-template-columns: repeat(4, 1fr); }
+.kpis--grid4{ grid-template-columns: repeat(4, 1fr); }
+.kpis--grid3{ grid-template-columns: repeat(3, 1fr); }
+.kpi{ background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 12px; }
+.kpi.neg{ border-color: rgba(255, 112, 112, .35); }
+.kpi__label{ display:block; color: var(--color-muted); font-size: 12px; }
+.kpi__value{ display:block; font-weight: 800; font-size: 20px; }
+
+.cards{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.card.small{ padding: 12px; }
+.big{ font-weight:800; font-size: 22px; }
+.list{ margin: 8px 0 0; padding-left: 16px; }
+
+/* Límite Free */
+.limit{ display:grid; gap:8px; }
+.limit__info{ display:flex; gap:10px; align-items:baseline; }
+.limit__hint{ color: var(--color-muted); }
+.limit__bar{ height: 10px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); }
+.limit__fill{ height: 100%; background: var(--color-primary); }
+.limit__warning{ color: #ffb4b4; }
+
+/* Form publicar */
+.seller__form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.seller__form label{ display:grid; gap:6px; }
+.seller__form input{
+  background: rgba(255,255,255,.06); color: var(--color-text);
+  border: 1px solid rgba(255,255,255,.12); border-radius:10px; padding:10px;
+}
+
+/* Tabla generica */
+.table{ border:1px solid rgba(255,255,255,.12); border-radius: 12px; overflow:hidden; }
+.table.compact .table__row > div, .table.compact .table__head > div{ padding: 8px 10px; }
+.table__head, .table__row{
+  display:grid; grid-template-columns: repeat(6, 1fr);
+}
+.table.compact .table__head, .table.compact .table__row{ grid-template-columns: repeat(3, 1fr); }
+.table__head{ background: rgba(255,255,255,.06); font-weight:700; }
+.table__head > div, .table__row > div{ padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.table__row:nth-child(even){ background: rgba(255,255,255,.02); }
+
+/* Estados */
+.status{ padding: 2px 8px; border-radius: 999px; border:1px solid rgba(255,255,255,.16); font-size: 12px; }
+.status--pending{ background: rgba(255,255,255,.06); }
+.status--paid{ background: rgba(16,185,129,.18); border-color: rgba(16,185,129,.4); }
+.status--shipped{ background: rgba(37,99,235,.18); border-color: rgba(37,99,235,.4); }
+.status--delivered{ background: rgba(234,179,8,.20); border-color: rgba(234,179,8,.4); }
+.status--cancelled{ background: rgba(255,112,112,.20); border-color: rgba(255,112,112,.4); }
+
+/* Seguridad */
+.sev{ padding: 2px 8px; border-radius: 999px; border:1px solid rgba(255,255,255,.16); font-size: 12px; text-transform: capitalize; }
+.sev--low{ background: rgba(125,211,252,.18); border-color: rgba(125,211,252,.4); }
+.sev--medium{ background: rgba(250,204,21,.20); border-color: rgba(250,204,21,.4); }
+.sev--high{ background: rgba(239,68,68,.24); border-color: rgba(239,68,68,.5); }
+
+/* Gate Pro/Enterprise */
+.gate{
+  padding: 16px; border:1px dashed rgba(255,255,255,.24); border-radius: 12px;
+  display:grid; gap:8px; text-align:center;
+}
+
+/* Utiles */
+.row{ display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
+.grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+
+/* Responsive */
+@media (max-width: 960px){
+  .kpis{ grid-template-columns: repeat(2, 1fr); }
+  .cards{ grid-template-columns: 1fr; }
+  .seller__form{ grid-template-columns: 1fr; }
+  .table__head, .table__row{ grid-template-columns: repeat(6, 200px); }
+  .table{ overflow-x: auto; }
+  .grid2{ grid-template-columns: 1fr; }
+}

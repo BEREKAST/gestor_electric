@@ -1,0 +1,12 @@
+{
+  "name": "gestor-electric-server",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n auth,catalog,gateway,orders,seller -c auto \"npm --prefix ./auth run dev\" \"npm --prefix ./catalog run dev\" \"npm --prefix ./gateway run dev\" \"npm --prefix ./orders run dev\" \"npm --prefix ./seller run dev\"",
+    "start": "concurrently -n auth,catalog,gateway,orders,seller -c auto \"npm --prefix ./auth start\" \"npm --prefix ./catalog start\" \"npm --prefix ./gateway start\" \"npm --prefix ./orders start\" \"npm --prefix ./seller start\"",
+    "install:all": "npm --prefix ./auth i && npm --prefix ./catalog i && npm --prefix ./gateway i && npm --prefix ./orders i && npm --prefix ./seller i"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

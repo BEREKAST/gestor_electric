@@ -1,0 +1,13 @@
+.cart{
+  display:grid; grid-template-columns: 2fr 1fr; gap:18px;
+}
+.cart__list{ padding:16px; }
+.cart__summary{ padding:16px; height:max-content; }
+.cart__row{
+  display:grid; grid-template-columns: 1fr auto auto; gap:10px;
+  padding:8px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.cart__sumrow{ display:flex; justify-content:space-between; padding:6px 0; }
+.cart__total{ font-weight:800; }
+.cart__btn{ display:block; text-align:center; margin-top:10px; }
+@media (max-width: 900px){ .cart{ grid-template-columns: 1fr; } }

@@ -1,0 +1,100 @@
+services:
+  gateway:
+    build: ./gateway
+    ports: ["8080:8080"]
+    environment:
+      - CORS_ORIGIN=http://localhost:5173
+      - AUTH_URL=http://auth:3001
+      - SELLER_URL=http://seller:3003
+      - CATALOG_URL=http://catalog:3002
+      - ORDERS_URL=http://orders:3004
+      - JWT_SECRET=dev_secret_change_me
+    depends_on:
+      auth:
+        condition: service_started
+      catalog:
+        condition: service_started
+      seller:
+        condition: service_started
+      orders:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    volumes: ["./gateway:/app"]
+
+  auth:
+    build: ./auth
+    environment:
+      - PORT=3001
+      - CORS_ORIGIN=http://localhost:5173
+      - JWT_SECRET=dev_secret_change_me
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/gestor?schema=auth
+      - NODE_ENV=development
+    ports: ["3001:3001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # ✅ genera, migra, siembra y arranca
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate dev --name init &&
+        node prisma/seed.mjs &&
+        node server.js
+      "
+    volumes: ["./auth:/app"]
+
+  catalog:
+    build: ./catalog
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/gestor?schema=catalog
+    ports: ["3002:3002"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma generate && npx prisma migrate dev --name init && node server.js"
+    volumes: ["./catalog:/app"]
+
+  seller:
+    build: ./seller
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/gestor?schema=seller
+    ports: ["3003:3003"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma generate && npx prisma migrate dev --name init && node server.js"
+    volumes: ["./seller:/app"]
+
+  orders:
+    build: ./orders
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/gestor?schema=orders
+      - CATALOG_URL=http://catalog:3002
+    ports: ["3004:3004"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+    command: sh -c "npx prisma generate && npx prisma migrate dev --name init && node server.js"
+    volumes: ["./orders:/app"]
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=gestor
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # ✅ asegura que DB esté lista antes de migrar
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gestor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

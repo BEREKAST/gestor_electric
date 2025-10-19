@@ -1,0 +1,11 @@
+.profile{ padding:18px; display:grid; gap:14px; max-width:720px; margin:0 auto; }
+.profile__header{ display:flex; gap:14px; align-items:center; }
+.avatar{
+  width:56px; height:56px; border-radius:50%;
+  background: rgba(255,255,255,.1);
+  display:grid; place-items:center;
+  font-weight:800; font-size:22px;
+  border:1px solid rgba(255,255,255,.12);
+}
+.muted{ color: var(--color-muted); margin:.2rem 0 0; }
+.profile__actions{ display:flex; gap:10px; }
