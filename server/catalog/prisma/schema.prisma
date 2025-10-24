@@ -1,24 +1,47 @@
+// server/catalog/prisma/schema.prisma
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["debian-openssl-3.0.x", "native"]
 }
 
+
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // o mysql/sqlite si prefieres
   url      = env("DATABASE_URL")
 }
 
 model Category {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  products Product[]
+  id        String    @id @default(cuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Product {
-  id         Int       @id @default(autoincrement())
-  name       String
-  price      Float
-  image      String?
-  stock      Int       @default(0)
-  category   Category  @relation(fields: [categoryId], references: [id])
-  categoryId Int
+  id          String         @id @default(cuid())
+  name        String
+  description String? 
+  price       Decimal        @db.Decimal(10,2)
+  stock       Int            @default(0)
+  categoryId  String?
+  category    Category?      @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  // quién lo publicó (para referencia cruzada con seller)
+  sellerId    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([categoryId])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  order     Int      @default(0)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
 }

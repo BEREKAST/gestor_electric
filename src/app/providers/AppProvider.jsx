@@ -1,13 +1,17 @@
 // src/app/providers/AppProvider.jsx
 // ===============================================
 // Este componente centraliza todos los providers globales
-// (por ahora solo AuthProvider, pero aquí puedes añadir más
-// como ThemeProvider, QueryClientProvider, etc.)
+// (AuthProvider, PlanProvider y futuros contextos globales)
 // ===============================================
 
-import { AuthProvider } from "../../features/auth/context/AuthProvider.jsx"; // ✅ ruta actualizada
+import { AuthProvider } from "../../features/auth/context/AuthProvider.jsx";
+import { PlanProvider } from "../../features/billing/context/PlanProvider.jsx";
 
+// ✅ Envuelve toda la app con Auth y Billing (planes)
 export function AppProvider({ children }) {
-  // Envuelve toda la aplicación con los proveedores necesarios
-  return <AuthProvider>{children}</AuthProvider>;
+  return (
+    <AuthProvider>
+      <PlanProvider>{children}</PlanProvider>
+    </AuthProvider>
+  );
 }

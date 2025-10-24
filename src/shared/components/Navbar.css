@@ -1,28 +1,104 @@
-.nav{
-  position: sticky; top: 0; z-index: 50;
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255,255,255,.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: color-mix(in oklab, var(--color-card) 88%, #000 12%);
 }
-.nav__inner{ height: 64px; display: flex; align-items: center; justify-content: space-between; }
-.nav__brand{ font-weight: 800; letter-spacing:.2px; }
-.nav__links{ display: flex; gap: 16px; align-items:center; }
-.nav__links a{ padding: 8px 12px; border-radius: 10px; color: var(--color-text); }
-.nav__links a.active{ background: rgba(255,255,255,.08); }
-.btn-primary{
+
+.nav__inner {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav__brand {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.nav__links {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.nav__links a {
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--color-text);
+}
+
+.nav__links a.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-primary {
   background: var(--color-primary);
   color: white !important;
   padding: 10px 14px;
   border-radius: 10px;
 }
-@media (max-width: 720px){
-  .nav__links{ gap: 10px; }
-  .nav__brand{ font-size: 15px; }
+
+@media (max-width: 720px) {
+  .nav__links {
+    gap: 10px;
+  }
+  .nav__brand {
+    font-size: 15px;
+  }
 }
-.pill{
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.12);
+
+.pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   padding: 8px 12px;
 }
-.pill:hover{ background: rgba(255,255,255,.12); }
+.pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* === NUEVO: Badge de plan actual === */
+.plan-badge {
+  background: var(--color-primary, #4a7d6f);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-left: 6px;
+  transition: background 0.2s ease;
+}
+
+/* Variaciones por plan */
+.plan-badge.plan-free {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-text);
+}
+
+.plan-badge.plan-pro {
+  background: #2b6cb0;
+}
+
+.plan-badge.plan-enterprise {
+  background: #805ad5;
+}
+
+/* Botón cerrar sesión minimalista */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.btn-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+}

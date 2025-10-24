@@ -1,18 +1,26 @@
 {
   "name": "seller",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.3",
+    "@prisma/client": "5.19.1",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "gestor-electric-server": "file:..",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
     "nodemon": "^3.1.0",
-    "prisma": "^6.16.3"
+    "prisma": "5.19.1"
   }
 }

@@ -1,6 +1,7 @@
+// src/shared/lib/api.js
 import http from "./http";
 
-/* ====== TUS APIS EXISTENTES (sin cambios) ====== */
+/* ====== SELLER API ====== */
 export const SellerAPI = {
   taxes: () => http.get("/seller/taxes"),
   addTax: (data) => http.post("/seller/taxes", data),
@@ -9,6 +10,7 @@ export const SellerAPI = {
   analytics: () => http.get("/seller/analytics/summary"),
 };
 
+/* ====== ORDERS API ====== */
 export const OrdersAPI = {
   checkout: (payload) => http.post("/checkout", payload),
   list: () => http.get("/orders"),
@@ -16,21 +18,23 @@ export const OrdersAPI = {
   stats: () => http.get("/orders/stats"),
 };
 
-/* ====== AuthAPI con cookies httpOnly ====== */
+/* ====== AUTH API (cookies httpOnly + JWT backend) ====== */
 const AUTH_BASE = import.meta.env.VITE_AUTH_URL ?? "http://localhost:3001";
 
 export const AuthAPI = {
+  /** Registro de nuevo usuario → plan 'free' fijo en backend */
   async register(payload) {
     const res = await fetch(`${AUTH_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(payload), // { name, email, password, role } → plan se ignora (free por backend)
+      body: JSON.stringify(payload), // { name, email, password, role }
     });
     if (!res.ok) throw new Error("Register failed");
     return res.json(); // { user }
   },
 
+  /** Login → genera cookie JWT */
   async login({ email, password }) {
     const res = await fetch(`${AUTH_BASE}/auth/login`, {
       method: "POST",
@@ -42,12 +46,16 @@ export const AuthAPI = {
     return res.json(); // { user }
   },
 
+  /** Obtener usuario autenticado desde cookie */
   async me() {
-    const res = await fetch(`${AUTH_BASE}/auth/me`, { credentials: "include" });
+    const res = await fetch(`${AUTH_BASE}/auth/me`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Me failed");
     return res.json(); // { user } | { user:null }
   },
 
+  /** Logout → limpia cookie JWT */
   async logout() {
     const res = await fetch(`${AUTH_BASE}/auth/logout`, {
       method: "POST",
@@ -57,15 +65,15 @@ export const AuthAPI = {
     return res.json(); // { ok:true }
   },
 
-  // ✅ usar tras pago (pro/enterprise). Actualiza cookie + devuelve user.
-  async changePlan(plan) {
+  /** ✅ Actualizar plan de usuario (free | pro | enterprise) */
+  async updatePlan(plan) {
     const res = await fetch(`${AUTH_BASE}/auth/plan`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ plan }), // 'pro' | 'enterprise' | 'free'
+      body: JSON.stringify({ plan }),
     });
-    if (!res.ok) throw new Error("Change plan failed");
+    if (!res.ok) throw new Error("Update plan failed");
     return res.json(); // { user }
   },
 };

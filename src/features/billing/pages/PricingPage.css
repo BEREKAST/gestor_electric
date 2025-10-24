@@ -1,40 +1,63 @@
-.pricing-grid{
+.pricing-grid {
   margin-top: 12px;
-  display:grid;
+  display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
-.plan{
+
+.plan {
   position: relative;
   padding: 16px;
-  display:grid;
+  display: grid;
   gap: 10px;
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--color-card) 95%, #000 5%);
+  transition: all 0.25s ease;
 }
-.plan.popular{
+
+.plan:hover {
+  border-color: color-mix(in oklab, var(--color-primary) 60%, white 10%);
+  transform: translateY(-3px);
+}
+
+.plan.popular {
   border-color: color-mix(in oklab, var(--color-primary) 60%, white 10%);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent);
 }
-.badge{
-  position:absolute; top: 10px; right: 10px;
-  font-size: 12px; padding: 4px 8px; border-radius: 999px;
-  background: var(--color-primary); color:#fff;
+
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
 }
-.plan__title{ margin: 0; }
-.plan__price{ display:flex; align-items: baseline; gap: 6px; }
-.amount{ font-size: 28px; font-weight: 800; }
-.per{ color: var(--color-muted); }
-.plan__tagline{ margin: 0; color: var(--color-muted); }
-.plan__features{ list-style: none; margin: 0; padding: 0; display:grid; gap: 8px; }
-.plan__features li{
+
+.plan__title { margin: 0; font-weight: 700; font-size: 18px; }
+.plan__price { display: flex; align-items: baseline; gap: 6px; }
+.amount { font-size: 28px; font-weight: 800; }
+.per { color: var(--color-muted); }
+.plan__tagline { margin: 0; color: var(--color-muted); font-size: 14px; }
+
+.plan__features {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 8px;
+}
+.plan__features li {
   position: relative; padding-left: 18px; font-size: 14px;
 }
-.plan__features li::before{
+.plan__features li::before {
   content: "✔";
-  position: absolute; left: 0; top: 0; line-height: 1;
-  opacity: .8;
+  position: absolute; left: 0; top: 0; line-height: 1; opacity: .8;
 }
-.btn.wide{ width: 100%; }
+
+.btn.wide { width: 100%; }
+
+.btn[disabled] { opacity: .6; cursor: not-allowed; }
 
 @media (max-width: 1024px){ .pricing-grid{ grid-template-columns: 1fr 1fr; } }
 @media (max-width: 680px){ .pricing-grid{ grid-template-columns: 1fr; } }

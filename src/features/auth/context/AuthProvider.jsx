@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
     setUser(user || null);
   }
 
-  // ✅ ya NO enviamos plan; backend lo fija a 'free'
+  // backend fija plan 'free'
   async function register({ name, email, password, role }) {
     await AuthAPI.register({ name, email, password, role });
     const { user } = await AuthAPI.me();
@@ -47,6 +47,11 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
+  // ✅ Exponer setUser para actualizar plan desde Pricing/Checkout
+  const value = useMemo(
+    () => ({ user, loading, login, register, logout, setUser }),
+    [user, loading]
+  );
+
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

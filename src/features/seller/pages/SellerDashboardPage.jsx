@@ -3,18 +3,112 @@ import "./SellerDashboardPage.css";
 import http from "../../../shared/lib/http.js";
 import { csvFromArray } from "../../../shared/lib/csv.js";
 import useAuth from "../../auth/context/useAuth.js";
+import { PLAN_PERKS, getUserPlan } from "../../../shared/lib/constants.js";
 
-const FREE_PRODUCT_LIMIT = 20;
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const daysAgo = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+
+function simulateProducts(count = 6) {
+  const names = [
+    "Cable de cobre 2mm",
+    "Bombilla LED 9W",
+    "Tomacorriente triple",
+    "Interruptor doble",
+    "Cinta aislante negra",
+    "Enchufe industrial 220V",
+    "Panel solar 300W",
+    "Batería 12V 7Ah",
+  ];
+  return Array.from({ length: count }, (_, i) => ({
+    id: 100 + i,
+    name: pick(names),
+    price: Number((20 + Math.random() * 200).toFixed(2)),
+    stock: rint(5, 80),
+    images: [],
+  }));
+}
+
+function simulateOrders(products = []) {
+  const clientes = ["beymar castañeta flores", "alejandro", "Berekast", "juan perez"];
+  const estados = ["pending", "paid", "shipped", "delivered", "cancelled"];
+  const prods = products.length ? products : simulateProducts(4);
+  const N = 14;
+
+  return Array.from({ length: N }, (_, i) => {
+    const p = pick(prods);
+    const qty = rint(1, 3);
+    const total = Number((Number(p.price || 0) * qty).toFixed(2));
+    return {
+      id: `S-${1001 + i}`,
+      customer: pick(clientes),
+      total,
+      status: pick(estados),
+      created_at: daysAgo(rint(0, 28)),
+      items: qty,
+    };
+  });
+}
+
+function simulateTaxes() {
+  return [
+    { id: 1, region: "Bolivia", rate: 13 },
+    { id: 2, region: "Chile", rate: 10 },
+  ];
+}
+
+function simulateSecurity() {
+  const sev = ["low", "medium", "high"];
+  const vec = ["login_failed", "token_expired", "rate_limit", "csrf_blocked"];
+  const n = 8;
+  return Array.from({ length: n }, (_, i) => ({
+    id: i + 1,
+    ts: daysAgo(rint(0, 14)),
+    ip: `192.168.${rint(0, 10)}.${rint(2, 200)}`,
+    vector: pick(vec),
+    severity: pick(sev),
+  }));
+}
+
+function simulateAudit() {
+  const acts = ["create_product", "update_price", "delete_product", "login", "logout"];
+  return Array.from({ length: 6 }, (_, i) => ({
+    id: i + 1,
+    ts: daysAgo(rint(0, 30)),
+    actor: "usuario_demo",
+    action: pick(acts),
+    meta: "demo",
+  }));
+}
+
+function simulateFinance(orders = []) {
+  const ingresos = (orders.length ? orders : simulateOrders())
+    .filter((o) => o.status !== "cancelled")
+    .map((o) => ({ concepto: `Venta ${o.id}`, fecha: o.created_at, monto: Number(o.total || 0) }));
+  const gastos = [
+    { concepto: "Publicidad", fecha: daysAgo(rint(0, 14)), monto: 120 },
+    { concepto: "Comisiones", fecha: daysAgo(rint(0, 10)), monto: 75 },
+    { concepto: "Logística",  fecha: daysAgo(rint(0, 20)), monto: 95 },
+  ];
+  return { ingresos, gastos };
+}
+/* ================================================================ */
 
 export default function SellerDashboardPage() {
   const { user } = useAuth();
 
-  // Plan detection robusta (usa lo que tengas en tu user)
-  const plan = (user?.plan || user?.vendor?.plan || "free").toLowerCase();
-  const isSeller = (user?.role || user?.vendor?.role) === "seller" || plan !== "free";
-  const isPro = plan === "pro" || plan === "enterprise";
-  const isEnterprise = plan === "enterprise";
+  const plan = getUserPlan(user);
+  const perks = PLAN_PERKS[plan] || PLAN_PERKS.free;
+
+  const isAdmin = user?.role === "admin";
+  const isSellerByRole = user?.role === "seller";
+  const canSell = isAdmin || isSellerByRole || perks.canSell;
 
   const [tab, setTab] = useState("resumen");
 
@@ -23,16 +117,25 @@ export default function SellerDashboardPage() {
   const [orders, setOrders] = useState([]);
   const [taxes, setTaxes] = useState([]);
   const [securityEvents, setSecurityEvents] = useState([]);
+  const [audit, setAudit] = useState([]);
   const [finance, setFinance] = useState({ ingresos: [], gastos: [] });
 
-  // Form publicar producto (Free/Pro/Ent)
-  const [form, setForm] = useState({ name: "", price: "", stock: "" });
+  // Mis productos (lista real)
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [errorProducts, setErrorProducts] = useState("");
 
-  // helper PUT seguro (usa http.put si existe; si no, fetch nativo)
+  // Form crear/editar
+  const [form, setForm] = useState({ name: "", price: "", stock: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  // imágenes
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+
   const safePut = async (path, body) => {
-    if (typeof http.put === "function") {
-      return http.put(path, body);
-    }
+    if (typeof http.put === "function") return http.put(path, body);
     const res = await fetch(`${API_BASE}${path}`, {
       method: "PUT",
       credentials: "include",
@@ -43,124 +146,227 @@ export default function SellerDashboardPage() {
     return res.json().catch(() => ({}));
   };
 
+  // Helpers productos
+  const loadMyProducts = async () => {
+    setLoadingProducts(true);
+    setErrorProducts("");
+    try {
+      const data = await http.get("/seller/products"); // [{id,name,price,stock,images:[...]}]
+      const arr = Array.isArray(data) ? data : [];
+      const final = arr.length ? arr : simulateProducts();
+      setProducts(final);
+      return final;
+    } catch (e) {
+      console.error("[INIT] /seller/products ERROR:", e);
+      const mock = simulateProducts();
+      setProducts(mock);
+      setErrorProducts(""); // 
+      return mock;
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const loadMyCount = async () => {
+    try {
+      const c = await http.get("/seller/products/count"); // {count}
+      setMyCount(Number(c?.count ?? 0));
+    } catch {
+      setMyCount((prev) => (products?.length || 0));
+    }
+  };
+
   // Cargas iniciales
   useEffect(() => {
     (async () => {
-      // Conteo de productos del vendedor
-      try {
-        const c = await http.get("/seller/products/count"); // {count}
-        setMyCount(Number(c?.count ?? 0));
-      } catch {
-        setMyCount(17);
-      }
+      const prods = await loadMyProducts();
+      await loadMyCount();
 
-      // Pedidos (vía ORDERS, no /seller)
       try {
         const o = await http.get("/orders");
-        setOrders(Array.isArray(o) ? o : []);
+        const arr = Array.isArray(o) ? o : [];
+        setOrders(arr.length ? arr : simulateOrders(prods));
       } catch {
-        // Mock
-        setOrders([
-          { id: "A-1001", customer: "ACME Ltd", total: 540.2, status: "paid", created_at: "2025-10-01", items: 3 },
-          { id: "A-1002", customer: "Beta SA", total: 120.0, status: "pending", created_at: "2025-10-02", items: 1 },
-          { id: "A-1003", customer: "Gamma SRL", total: 890.0, status: "shipped", created_at: "2025-10-03", items: 5 },
-          { id: "A-1004", customer: "Delta Inc", total: 210.0, status: "delivered", created_at: "2025-10-04", items: 2 },
-          { id: "A-1005", customer: "Omega LLC", total: 45.9, status: "cancelled", created_at: "2025-10-04", items: 1 },
-        ]);
+        setOrders(simulateOrders(prods));
       }
 
-      // Impuestos
-      try {
-        const t = await http.get("/seller/taxes");
-        setTaxes(Array.isArray(t) ? t : []);
-      } catch {
-        setTaxes([
-          { id: 1, region: "BO - General", rate: 13 },
-          { id: 2, region: "AR - BsAs", rate: 21 },
-        ]);
+      if (perks.taxes) {
+        try {
+          const t = await http.get("/seller/taxes");
+          const arr = Array.isArray(t) ? t : [];
+          setTaxes(arr.length ? arr : simulateTaxes());
+        } catch {
+          setTaxes(simulateTaxes());
+        }
       }
 
-      // Seguridad (intentos / eventos)
       try {
         const s = await http.get("/seller/security/events");
-        setSecurityEvents(Array.isArray(s) ? s : []);
+        const arr = Array.isArray(s) ? s : [];
+        setSecurityEvents(arr.length ? arr : simulateSecurity());
       } catch {
-        setSecurityEvents([
-          { id: "S-1", ts: "2025-10-02 12:02", ip: "192.168.1.10", vector: "login_fail", severity: "medium" },
-          { id: "S-2", ts: "2025-10-03 09:45", ip: "200.87.22.14", vector: "rate_limit", severity: "low" },
-          { id: "S-3", ts: "2025-10-04 18:21", ip: "177.234.5.7", vector: "suspicious_scan", severity: "high" },
-        ]);
+        setSecurityEvents(simulateSecurity());
       }
 
-      // Finanzas
+      if (perks.audit) {
+        try {
+          const a = await http.get("/seller/audit");
+          const arr = Array.isArray(a) ? a : [];
+          setAudit(arr.length ? arr : simulateAudit());
+        } catch {
+          setAudit(simulateAudit());
+        }
+      }
+
       try {
-        const f = await http.get("/seller/finance"); // {ingresos:[], gastos:[]}
-        setFinance(f || { ingresos: [], gastos: [] });
+        const f = await http.get("/seller/finance");
+        const obj = f && typeof f === "object" ? f : null;
+        setFinance(
+          obj && (obj.ingresos?.length || obj.gastos?.length) ? obj : simulateFinance(orders)
+        );
       } catch {
-        setFinance({
-          ingresos: [
-            { id: "I-1", fecha: "2025-10-01", concepto: "Ventas online", monto: 540.2 },
-            { id: "I-2", fecha: "2025-10-03", concepto: "Ventas online", monto: 890.0 },
-          ],
-          gastos: [
-            { id: "G-1", fecha: "2025-10-02", concepto: "Publicidad", monto: 120.0 },
-            { id: "G-2", fecha: "2025-10-04", concepto: "Logística", monto: 60.0 },
-          ],
-        });
+        setFinance(simulateFinance(orders));
       }
     })();
-  }, []);
+  }, [plan]);
 
-  // KPIs rápidos
+  // KPIs
   const kpis = useMemo(() => {
     const totalOrders = orders.length;
     const paid = orders.filter(o => o.status === "paid" || o.status === "delivered").length;
     const revenue = orders.filter(o => o.status !== "cancelled")
-                          .reduce((a, o) => a + Number(o.total || 0), 0);
+      .reduce((a, o) => a + Number(o.total || 0), 0);
     const avgOrder = totalOrders ? (revenue / totalOrders) : 0;
     const conv = totalOrders ? (paid / totalOrders) * 100 : 0;
 
-    const ing = finance.ingresos?.reduce((a,i)=>a + Number(i.monto||0), 0) || 0;
-    const gas = finance.gastos?.reduce((a,g)=>a + Number(g.monto||0), 0) || 0;
+    const ing = finance.ingresos?.reduce((a, i) => a + Number(i.monto || 0), 0) || 0;
+    const gas = finance.gastos?.reduce((a, g) => a + Number(g.monto || 0), 0) || 0;
     const utilidad = ing - gas;
 
     return { totalOrders, paid, revenue, avgOrder, conv, ing, gas, utilidad };
   }, [orders, finance]);
 
-  const remaining = Math.max(0, FREE_PRODUCT_LIMIT - myCount);
+  const remaining = Math.max(0, (perks.productLimit ?? 0) - myCount);
 
-  // Handlers
   const onChangeForm = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const onPickImages = (e) => {
+    const arr = Array.from(e.target.files || []);
+    const limited = arr.slice(0, perks.maxImagesPerProduct);
+    setFiles(limited);
+    setPreviews(limited.map(f => URL.createObjectURL(f)));
+  };
+
+  const uploadImages = async () => {
+    if (!files.length) return [];
+    if (!import.meta.env.VITE_CLOUDINARY_UPLOAD_URL) {
+      try {
+        const form = new FormData();
+        files.forEach(f => form.append("files", f));
+        const res = await fetch(`${API_BASE}/seller/upload`, { method: "POST", credentials: "include", body: form });
+        if (!res.ok) throw new Error("upload failed");
+        const data = await res.json().catch(() => ({}));
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.images)) return data.images;
+        return [];
+      } catch {
+        // fallback: previews (temporal)
+        return previews.map((u, i) => ({ url: u, alt: `img-${i + 1}`, order: i }));
+      }
+    }
+    try {
+      const urls = [];
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append("file", f);
+        fd.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET || "");
+        const res = await fetch(import.meta.env.VITE_CLOUDINARY_UPLOAD_URL, { method: "POST", body: fd });
+        const json = await res.json();
+        if (json.secure_url) urls.push({ url: json.secure_url, alt: f.name, order: urls.length });
+      }
+      return urls;
+    } catch {
+      return previews.map((u, i) => ({ url: u, alt: `img-${i + 1}`, order: i }));
+    }
+  };
+
+  const resetForm = () => {
+    setForm({ name: "", price: "", stock: "" });
+    setFiles([]); setPreviews([]); setEditingId(null);
+  };
 
   const publicar = async (e) => {
     e.preventDefault();
-    if (remaining <= 0) return alert("Límite Free alcanzado. Mejora tu plan en /pricing.");
+    if (saving) return;
+
+    if (!canSell) return alert("Tu plan no permite publicar. Mejora a PRO o ENTERPRISE.");
+    if (perks.productLimit && remaining <= 0 && !editingId) return alert(`Límite de productos (${perks.productLimit}) alcanzado. Mejora tu plan.`);
     if (!form.name || form.name.length > 80) return alert("Nombre requerido (máx. 80).");
     if (!form.price || Number(form.price) < 0.01 || Number(form.price) > 100000) return alert("Precio inválido.");
     if (Number(form.stock) < 0) return alert("Stock no puede ser negativo.");
 
+    if (perks.maxImagesPerProduct === 0 && files.length > 0) {
+      return alert("Tu plan no permite subir imágenes. Mejora el plan.");
+    }
+    if (files.length > perks.maxImagesPerProduct) {
+      return alert(`Máximo ${perks.maxImagesPerProduct} imágenes por producto en tu plan.`);
+    }
+
+    setSaving(true);
     try {
-      await http.post("/seller/products", {
-        name: form.name, price: Number(form.price), stock: Number(form.stock),
-      });
-      alert("Producto creado.");
-      setMyCount(c => c + 1);
-      setForm({ name: "", price: "", stock: "" });
+      const newImages = await uploadImages();
+      const body = {
+        name: String(form.name).trim(),
+        price: Number(form.price),
+        stock: Number(form.stock),
+        ...(newImages.length ? { images: newImages } : {}),
+      };
+
+      if (editingId) {
+        await http.put(`/seller/products/${editingId}`, body);
+        alert("Producto actualizado.");
+      } else {
+        await http.post("/seller/products", body);
+        alert("Producto creado.");
+      }
+
+      await Promise.allSettled([loadMyProducts(), loadMyCount()]);
+      resetForm();
+    } catch (e2) {
+      const msg = e2?.payload?.error || e2?.payload?.message || e2?.message || "No se pudo guardar el producto.";
+      alert(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editProduct = (p) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name || "",
+      price: Number(p.price ?? 0),
+      stock: Number(p.stock ?? 0),
+    });
+    setFiles([]);
+    setPreviews((p.images || []).map((im) => im.url));
+  };
+
+  const deleteProduct = async (id) => {
+    if (!confirm("¿Eliminar este producto?")) return;
+    try {
+      await http.del(`/seller/products/${id}`);
+      await Promise.allSettled([loadMyProducts(), loadMyCount()]);
+      if (editingId === id) resetForm();
     } catch {
-      alert("Producto creado (demo).");
-      setMyCount(c => c + 1);
-      setForm({ name: "", price: "", stock: "" });
+      alert("No se pudo eliminar.");
     }
   };
 
   const updateStatus = async (id, status) => {
     try {
-      // Si existe endpoint real: PUT /orders/:id/status
       await safePut(`/orders/${id}/status`, { status });
-      setOrders(orders.map(o => o.id === id ? { ...o, status } : o));
+      setOrders(orders.map(o => (o.id === id ? { ...o, status } : o)));
     } catch {
-      // Fallback local (UI-only)
-      setOrders(orders.map(o => o.id === id ? { ...o, status } : o));
+      setOrders(orders.map(o => (o.id === id ? { ...o, status } : o))); // optimista
     }
   };
 
@@ -190,9 +396,7 @@ export default function SellerDashboardPage() {
   };
 
   const exportar = (tipo) => {
-    if (tipo === "orders") {
-      return csvFromArray(orders, "pedidos.csv");
-    }
+    if (tipo === "orders") return csvFromArray(orders, "pedidos.csv");
     if (tipo === "ventas") {
       const ventas = orders
         .filter(o => o.status !== "cancelled")
@@ -200,27 +404,27 @@ export default function SellerDashboardPage() {
       return csvFromArray(ventas, "ventas.csv");
     }
     if (tipo === "productos") {
-      // En real vendría del backend /seller/products
-      const productos = [
-        { id: "1", nombre: "Medidor Digital", stock: 12, precio: 120.5 },
-        { id: "2", nombre: "Transformador 5kVA", stock: 4, precio: 890.0 },
-      ];
-      return csvFromArray(productos, "productos.csv");
+      const listado = products.map(p => ({
+        id: p.id, nombre: p.name, stock: p.stock, precio: p.price, imagenes: (p.images?.length || 0)
+      }));
+      return csvFromArray(listado, "productos.csv");
     }
   };
 
-  // Gates de plan
-  const Gate = ({ children }) => {
-    if (isPro) return children;
-    return (
-      <div className="gate">
-        <p><strong>Función disponible en Plan Pro o Enterprise.</strong></p>
-        <a href="/pricing" className="btn">Mejorar plan</a>
-      </div>
-    );
-  };
+  const GateProEnt = ({ children }) => (perks.canSell ? children : (
+    <div className="gate">
+      <p><strong>Función disponible en Plan Pro o Enterprise.</strong></p>
+      <a href="/pricing" className="btn">Mejorar plan</a>
+    </div>
+  ));
 
-  // UI
+  const GateEnt = ({ children }) => (perks.audit ? children : (
+    <div className="gate">
+      <p><strong>Función exclusiva de Enterprise (Auditoría avanzada).</strong></p>
+      <a href="/pricing" className="btn">Mejorar a Enterprise</a>
+    </div>
+  ));
+
   return (
     <section className="section">
       <div className="container">
@@ -228,12 +432,11 @@ export default function SellerDashboardPage() {
           <header className="seller__head">
             <div>
               <h2>Panel de Vendedor</h2>
-              <p className="muted">Plan actual: <strong className={`tag tag--${plan}`}>{plan}</strong></p>
+              <p className="muted">Plan actual: <strong className={`tag tag--${plan}`}>{perks.label}</strong></p>
             </div>
-            {!isPro && <a className="btn" href="/pricing">Mejorar a Pro</a>}
+            {!perks.canSell && <a className="btn" href="/pricing">Mejorar plan</a>}
           </header>
 
-          {/* Tabs */}
           <div className="tabs">
             <button className={`tab ${tab==='resumen'?'active':''}`} onClick={()=>setTab("resumen")}>Resumen</button>
             <button className={`tab ${tab==='estados'?'active':''}`} onClick={()=>setTab("estados")}>Estados</button>
@@ -241,10 +444,11 @@ export default function SellerDashboardPage() {
             <button className={`tab ${tab==='analitica'?'active':''}`} onClick={()=>setTab("analitica")}>Analítica</button>
             <button className={`tab ${tab==='informes'?'active':''}`} onClick={()=>setTab("informes")}>Informes</button>
             <button className={`tab ${tab==='seguridad'?'active':''}`} onClick={()=>setTab("seguridad")}>Seguridad</button>
+            <button className={`tab ${tab==='auditoria'?'active':''}`} onClick={()=>setTab("auditoria")}>Auditoría</button>
             <button className={`tab ${tab==='finanzas'?'active':''}`} onClick={()=>setTab("finanzas")}>Finanzas</button>
           </div>
 
-          {/* Contenido por pestaña */}
+          {/* RESUMEN: KPIs + Form + Lista de productos */}
           {tab === "resumen" && (
             <div className="panel">
               <div className="kpis">
@@ -254,23 +458,21 @@ export default function SellerDashboardPage() {
                 <div className="kpi"><span className="kpi__label">Conversión</span><span className="kpi__value">{kpis.conv.toFixed(1)}%</span></div>
               </div>
 
-              {/* Límite Free */}
+              {/* Límite */}
               <div className="limit">
                 <div className="limit__info">
-                  <strong>Plan Free:</strong> {myCount}/{FREE_PRODUCT_LIMIT} productos publicados
-                  <span className="limit__hint">({remaining} disponibles)</span>
+                  <strong>Productos:</strong> {myCount}/{perks.productLimit} permitidos
+                  <span className="limit__hint">({Math.max(0, (perks.productLimit - myCount))} restantes)</span>
                 </div>
                 <div className="limit__bar">
-                  <div className="limit__fill" style={{ width: `${(myCount/ FREE_PRODUCT_LIMIT) * 100}%` }} />
+                  <div className="limit__fill" style={{ width: `${Math.min(100, (myCount / perks.productLimit) * 100)}%` }} />
                 </div>
-                {remaining <= 0 && (
-                  <p className="limit__warning">
-                    Límite alcanzado. <a href="/pricing">Mejorar plan</a>
-                  </p>
+                {perks.productLimit && myCount >= perks.productLimit && (
+                  <p className="limit__warning">Límite alcanzado. <a href="/pricing">Mejorar plan</a></p>
                 )}
               </div>
 
-              {/* Publicar producto */}
+              {/* Form crear/editar */}
               <form className="seller__form" onSubmit={publicar}>
                 <label>Nombre (máx. 80)
                   <input name="name" value={form.name} onChange={onChangeForm} maxLength={80} required />
@@ -282,12 +484,74 @@ export default function SellerDashboardPage() {
                 <label>Stock (≥ 0)
                   <input name="stock" type="number" min="0" value={form.stock} onChange={onChangeForm} required />
                 </label>
-                <button className="btn" disabled={!isSeller || remaining <= 0}>Publicar</button>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label>Imágenes ({files.length}/{perks.maxImagesPerProduct})</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={!perks.canSell || perks.maxImagesPerProduct === 0}
+                    onChange={onPickImages}
+                  />
+                  {!!previews.length && (
+                    <div className="row" style={{ marginTop: 8 }}>
+                      {previews.map((src, i) => (
+                        <img key={i} src={src} alt={`prev-${i}`} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8 }} />
+                      ))}
+                    </div>
+                  )}
+                  {editingId && <p className="muted">Editando producto <strong>#{editingId}</strong>. Si no subes nuevas imágenes, se mantienen las actuales.</p>}
+                </div>
+
+                <div className="row">
+                  <button type="submit" className="btn" disabled={saving || !canSell || (!editingId && (perks.productLimit && remaining <= 0))}>
+                    {saving ? "Guardando…" : (editingId ? "Guardar cambios" : "Publicar")}
+                  </button>
+                  {editingId && (
+                    <button type="button" className="btn btn--ghost" onClick={resetForm} disabled={saving}>Cancelar edición</button>
+                  )}
+                </div>
+
+                {!canSell && <p className="muted">Tu plan no permite publicar. Mejora a PRO o ENTERPRISE.</p>}
               </form>
-              {!isSeller && <p className="muted">Activa tu modo vendedor para publicar productos.</p>}
+
+              {/* Lista de mis productos */}
+              <div className="table" style={{ marginTop: 8 }}>
+                <div className="table__head">
+                  <div>Nombre</div><div>Precio</div><div>Stock</div><div>Imágenes</div><div>ID</div><div>Acciones</div>
+                </div>
+                {loadingProducts && (
+                  <div className="table__row"><div>Cargando…</div><div></div><div></div><div></div><div></div><div></div></div>
+                )}
+                {!loadingProducts && errorProducts && (
+                  <div className="table__row"><div>{errorProducts}</div><div></div><div></div><div></div><div></div><div></div></div>
+                )}
+                {!loadingProducts && !products.length && !errorProducts && (
+                  <div className="table__row"><div>No tienes productos publicados todavía.</div><div></div><div></div><div></div><div></div><div></div></div>
+                )}
+                {products.map(p => (
+                  <div className="table__row" key={p.id}>
+                    <div>{p.name}</div>
+                    <div>Bs {Number(p.price).toFixed(2)}</div>
+                    <div>{Number(p.stock)}</div>
+                    <div>{p.images?.length || 0}</div>
+                    <div>{p.id}</div>
+                    <div className="row">
+                      <button className="btn btn--ghost" onClick={()=>editProduct(p)} disabled={saving}>Editar</button>
+                      <button className="btn btn--ghost" onClick={()=>deleteProduct(p.id)} disabled={saving}>Eliminar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="row" style={{ marginTop: 8 }}>
+                <button className="btn btn--ghost" onClick={()=>exportar("productos")}>Exportar listado (CSV)</button>
+              </div>
             </div>
           )}
 
+          {/* Estados */}
           {tab === "estados" && (
             <div className="panel">
               <div className="table">
@@ -316,8 +580,9 @@ export default function SellerDashboardPage() {
             </div>
           )}
 
+          {/* Impuestos */}
           {tab === "impuestos" && (
-            <Gate>
+            <GateProEnt>
               <div className="panel">
                 <form className="row" onSubmit={addTax}>
                   <input name="region" placeholder="Región / País" />
@@ -335,13 +600,13 @@ export default function SellerDashboardPage() {
                     </div>
                   ))}
                 </div>
-                <p className="muted">Estas tasas se aplicarán en el cálculo de impuestos en tu checkout (cuando el backend lo integre).</p>
               </div>
-            </Gate>
+            </GateProEnt>
           )}
 
+          {/* Analítica */}
           {tab === "analitica" && (
-            <Gate>
+            <GateProEnt>
               <div className="panel">
                 <h3>Métricas de rendimiento</h3>
                 <div className="kpis kpis--grid4">
@@ -350,60 +615,26 @@ export default function SellerDashboardPage() {
                   <div className="kpi"><span className="kpi__label">Ingresos (Bs)</span><span className="kpi__value">{kpis.revenue.toFixed(2)}</span></div>
                   <div className="kpi"><span className="kpi__label">Conversión</span><span className="kpi__value">{kpis.conv.toFixed(1)}%</span></div>
                 </div>
-
-                <div className="cards">
-                  <div className="card small">
-                    <h4>Ticket promedio</h4>
-                    <p className="big">Bs {kpis.avgOrder.toFixed(2)}</p>
-                    <p className="muted">Promedio de venta por pedido.</p>
-                  </div>
-                  <div className="card small">
-                    <h4>Top canales (demo)</h4>
-                    <ul className="list">
-                      <li>Orgánico — 52%</li>
-                      <li>Referidos — 28%</li>
-                      <li>Anuncios — 20%</li>
-                    </ul>
-                  </div>
-                  <div className="card small">
-                    <h4>Rendimiento (motor)</h4>
-                    <p className="muted">Estimación simple basada en estados:</p>
-                    <ul className="list">
-                      <li>Score = paid*2 + shipped*1.5 + delivered*2.5 − cancelled*1</li>
-                    </ul>
-                    <p className="big">
-                      {
-                        (() => {
-                          const paid = orders.filter(o=>o.status==='paid').length;
-                          const shipped = orders.filter(o=>o.status==='shipped').length;
-                          const delivered = orders.filter(o=>o.status==='delivered').length;
-                          const cancelled = orders.filter(o=>o.status==='cancelled').length;
-                          const score = paid*2 + shipped*1.5 + delivered*2.5 - cancelled*1;
-                          return score.toFixed(1);
-                        })()
-                      }
-                    </p>
-                  </div>
-                </div>
               </div>
-            </Gate>
+            </GateProEnt>
           )}
 
+          {/* Informes */}
           {tab === "informes" && (
-            <Gate>
+            <GateProEnt>
               <div className="panel">
                 <div className="row">
                   <button className="btn" onClick={()=>exportar("orders")}>Descargar pedidos (CSV)</button>
                   <button className="btn" onClick={()=>exportar("ventas")}>Descargar ventas (CSV)</button>
                   <button className="btn" onClick={()=>exportar("productos")}>Descargar productos (CSV)</button>
                 </div>
-                <p className="muted">Los informes se generan en el navegador a partir de los datos cargados. Con backend, se podrán programar y enviar por email.</p>
               </div>
-            </Gate>
+            </GateProEnt>
           )}
 
+          {/* Seguridad */}
           {tab === "seguridad" && (
-            <Gate>
+            <GateProEnt>
               <div className="panel">
                 <div className="table">
                   <div className="table__head">
@@ -418,17 +649,40 @@ export default function SellerDashboardPage() {
                     </div>
                   ))}
                 </div>
-                {isEnterprise ? (
-                  <p className="muted">Como Enterprise, puedes solicitar informes detallados de auditoría (SSO/SCIM).</p>
-                ) : (
-                  <p className="muted">Para auditoría avanzada y SSO/SCIM, mejora a Enterprise.</p>
-                )}
               </div>
-            </Gate>
+            </GateProEnt>
           )}
 
+          {/* Auditoría */}
+          {tab === "auditoria" && (
+            <GateEnt>
+              <div className="panel">
+                <h3>Auditoría</h3>
+                <div className="table">
+                  <div className="table__head">
+                    <div>Fecha</div><div>Actor</div><div>Acción</div><div>Meta</div><div>ID</div><div>—</div>
+                  </div>
+                  {audit.map(a => (
+                    <div className="table__row" key={a.id}>
+                      <div>{a.ts}</div>
+                      <div>{a.actor}</div>
+                      <div>{a.action}</div>
+                      <div>{a.meta || "—"}</div>
+                      <div>{a.id}</div>
+                      <div><button className="btn btn--ghost" onClick={()=>alert("Detalle de auditoría (demo)")}>Ver</button></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="row">
+                  <button className="btn" onClick={()=>csvFromArray(audit, "auditoria.csv")}>Exportar auditoría (CSV)</button>
+                </div>
+              </div>
+            </GateEnt>
+          )}
+
+          {/* Finanzas */}
           {tab === "finanzas" && (
-            <Gate>
+            <GateProEnt>
               <div className="panel">
                 <div className="kpis kpis--grid3">
                   <div className="kpi"><span className="kpi__label">Ingresos</span><span className="kpi__value">Bs {kpis.ing.toFixed(2)}</span></div>
@@ -438,33 +692,8 @@ export default function SellerDashboardPage() {
                     <span className="kpi__value">Bs {kpis.utilidad.toFixed(2)}</span>
                   </div>
                 </div>
-
-                <div className="grid2">
-                  <div className="card">
-                    <h4>Ingresos</h4>
-                    <div className="table compact">
-                      <div className="table__head"><div>Fecha</div><div>Concepto</div><div>Monto</div></div>
-                      {finance.ingresos?.map(i=>(
-                        <div className="table__row" key={i.id}>
-                          <div>{i.fecha}</div><div>{i.concepto}</div><div>Bs {Number(i.monto).toFixed(2)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="card">
-                    <h4>Gastos</h4>
-                    <div className="table compact">
-                      <div className="table__head"><div>Fecha</div><div>Concepto</div><div>Monto</div></div>
-                      {finance.gastos?.map(g=>(
-                        <div className="table__row" key={g.id}>
-                          <div>{g.fecha}</div><div>{g.concepto}</div><div>Bs {Number(g.monto).toFixed(2)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
-            </Gate>
+            </GateProEnt>
           )}
         </div>
       </div>

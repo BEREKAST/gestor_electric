@@ -1,7 +1,21 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
+
 WORKDIR /app
-COPY package.json ./
-RUN npm i
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+RUN npm ci
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
 COPY . .
-EXPOSE 3001 3002 3003 3004
-CMD ["npm","run","dev"]
+
+ENV NODE_ENV=production
+ENV PORT=3003
+EXPOSE 3003
+
+CMD ["node", "server.js"]

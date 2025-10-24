@@ -1,19 +1,20 @@
+// src/shared/components/Navbar.jsx
 import { Link, NavLink } from "react-router-dom";
 import "./Navbar.css";
 import useAuth from "/src/features/auth/context/useAuth.js";
 
+export default function Navbar() {
+  const { user, logout } = useAuth();
 
-export default function Navbar(){
-  const { user } = useAuth();
+  const isLogged = !!user;
+  const isAdmin = user?.role === "admin";
+  const hasPlan = ["free", "pro", "enterprise"].includes(user?.plan || "");
+  const canSell = isLogged && hasPlan; // ✅ mostrar "Vender" con cualquier plan
 
-  // Nombre a mostrar: name → email (antes de @) → "Mi perfil"
   const displayName =
     user?.name?.trim() ||
     (user?.email ? user.email.split("@")[0] : "") ||
     "Mi perfil";
-
-  const isAdmin = user?.role === "admin";
-  const isLogged = Boolean(user);
 
   return (
     <header className="nav">
@@ -25,21 +26,27 @@ export default function Navbar(){
           <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/cart">Carrito</NavLink>
 
-          {/* Usuario logueado NO admin → solo Inicio, Carrito, Perfil */}
-          {isLogged && !isAdmin && (
-            <NavLink to="/profile" className="pill">
-              {displayName}
-            </NavLink>
-          )}
+          {/* ✅ Mostrar "Vender" si está logueado y tiene plan (free/pro/enterprise) */}
+          {canSell && <NavLink to="/seller">Vender</NavLink>}
 
-          {/* Admin o no logueado → mantenemos lo que ya había */}
-          {!isLogged || isAdmin ? (
+          {/* Usuario logueado */}
+          {isLogged ? (
             <>
-              <NavLink to="/seller">Vender</NavLink>
+              <NavLink to="/profile" className="pill">{displayName}</NavLink>
+              {user?.plan && (
+                <span className={`plan-badge plan-${user.plan}`}>
+                  {user.plan.toUpperCase()}
+                </span>
+              )}
+              <button className="btn-link" onClick={logout}>Cerrar sesión</button>
+            </>
+          ) : (
+            // No logueado
+            <>
               <NavLink to="/register">Crear cuenta</NavLink>
               <NavLink to="/login" className="btn-primary">Ingresar</NavLink>
             </>
-          ) : null}
+          )}
         </nav>
       </div>
     </header>

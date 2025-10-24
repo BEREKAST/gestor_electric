@@ -8,15 +8,18 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "node prisma/seed.mjs"
+    "db:seed": "node prisma/seed.mjs",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.3",
+    "@prisma/client": "^5.19.1",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "gestor-electric-server": "file:..",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "prisma": "^6.16.3"
+    "prisma": "^5.19.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
